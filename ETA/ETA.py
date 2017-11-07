@@ -31,5 +31,6 @@ class Timer(object):
         percent = self.i/self.num_units
         eta_sec = int(tm_used * (1-percent)/percent)
 
-        s = "{:.2f}% , ETA: {:d} sec".format(100*percent, int(eta))
-        return s
+        # s = "{:.2f}% , ETA: {:d} sec".format(100*percent, int(eta))
+        return pretty_eta(eta_sec)
+        # return s
