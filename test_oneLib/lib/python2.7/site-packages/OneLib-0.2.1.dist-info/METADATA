@@ -1,0 +1,24 @@
+Metadata-Version: 2.0
+Name: OneLib
+Version: 0.2.1
+Summary: my little tool set
+Home-page: https://github.com/gaoyuanhezhihao/pyLib
+Author: He Zhihao
+Author-email: gaoyuanhezhihao@gmail.com
+License: MIT
+Keywords: testing,logging,example
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
+
+UNKNOWN
+
+
