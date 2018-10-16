@@ -1,0 +1,2 @@
+pytest -vrsx ./main.py
+
