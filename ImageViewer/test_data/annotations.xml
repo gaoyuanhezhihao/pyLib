@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<annotations>
+  <version>1.1</version>
+  <meta>
+    <task>
+      <id>177</id>
+      <name>pole_detection_sz_170</name>
+      <size>181</size>
+      <mode>annotation</mode>
+      <overlap>0</overlap>
+      <bugtracker></bugtracker>
+      <created>2021-03-11 09:34:51.512439+00:00</created>
+      <updated>2021-03-15 06:21:55.854662+00:00</updated>
+      <start_frame>0</start_frame>
+      <stop_frame>180</stop_frame>
+      <frame_filter></frame_filter>
+      <z_order>False</z_order>
+      <labels>
+        <label>
+          <name>pole</name>
+          <attributes>
+          </attributes>
+        </label>
+      </labels>
+      <segments>
+        <segment>
+          <id>100</id>
+          <start>0</start>
+          <stop>180</stop>
+          <url>http://10.10.30.213:8080/?id=100</url>
+        </segment>
+      </segments>
+      <owner>
+        <username>kcen</username>
+        <email>kcen@autox.ai</email>
+      </owner>
+      <assignee></assignee>
+    </task>
+    <dumped>2021-03-18 08:06:39.365743+00:00</dumped>
+  </meta>
+  <image id="0" name="pole_detection/guimiao-night_0.png" width="1920" height="1080">
+    <polygon label="pole" occluded="0" points="178.15,464.53;179.70,609.85;187.13,608.82;185.23,465.39">
+    </polygon>
+    <polygon label="pole" occluded="0" points="491.80,437.90;492.20,546.70;497.30,547.00;496.00,438.20">
+    </polygon>
+    <polygon label="pole" occluded="0" points="1115.80,241.60;1121.10,608.10;1127.70,607.80;1123.00,242.10">
+    </polygon>
+    <polygon label="pole" occluded="0" points="973.60,419.50;978.00,580.50;981.60,579.90;977.70,419.50">
+    </polygon>
+    <polygon label="pole" occluded="0" points="156.88,324.78;161.20,524.94;168.54,525.38;166.53,325.65">
+    </polygon>
+  </image>
+  <image id="1" name="pole_detection/guimiao-night_1170.png" width="1920" height="1080">
+    <polygon label="pole" occluded="0" points="1382.10,263.44;1391.80,596.20;1396.80,596.00;1389.30,263.94">
+    </polygon>
+    <polygon label="pole" occluded="0" points="1290.35,339.51;1294.37,602.94;1300.40,603.28;1295.37,339.51">
+    </polygon>
+    <polygon label="pole" occluded="0" points="768.42,470.28;771.65,469.95;772.14,593.11;769.23,593.11">
+    </polygon>
+    <polygon label="pole" occluded="0" points="1141.35,480.64;1145.87,480.31;1149.59,596.20;1144.26,596.53">
+    </polygon>
+    <polygon label="pole" occluded="0" points="1439.76,489.59;1442.78,607.23;1446.46,604.88;1443.45,489.59">
+    </polygon>
+    <polygon label="pole" occluded="0" points="1315.33,483.58;1318.56,607.06;1322.44,607.06;1319.04,483.90">
+    </polygon>
+  </image>
+</annotations>

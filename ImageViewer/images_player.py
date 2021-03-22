@@ -9,12 +9,12 @@ import threading
 
 
 def load_image(fp, dst, key, cond_var=None):
-    print("reading %s..."%fp)
+    # print("reading %s..."%fp)
     img = cv2.imread(fp)
     dst[key] = img
     if cond_var:
         cond_var.notify()
-    print("readed %s Done %d" % (fp, key))
+    # print("readed %s Done %d" % (fp, key))
 
 
 class ImageMap:
@@ -24,10 +24,14 @@ class ImageMap:
         self.thread_map_ = {}
         self.i_ = 0
         self.dir_ = directory
+        self.buffered_ = set()
+        self.list_files(directory)
+        self.update_jobs()
+
+    def list_files(self, directory):
         fnames = os.listdir(directory)
         self.fnames_ = sorted(fnames, key=lambda x:int(x[:x.find('.')]))
-        self.buffered_ = set()
-        self.update_jobs()
+
 
     def inc(self, step = 1) :
         self.i_ += step
@@ -41,7 +45,7 @@ class ImageMap:
 
 
     def update_jobs(self):
-        for i in range(self.i_, self.i_+10):
+        for i in range(self.i_, min(len(self.fnames_)-1, self.i_+10)):
             if i not in self.map_:
                 self.buffered_.add(i)
                 self.map_[i] = i
