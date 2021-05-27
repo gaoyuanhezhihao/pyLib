@@ -1,5 +1,5 @@
 import pytest
-from IoU_player import parse_gt, parse_gt_pole, calculate_iou_of_bbox, area_of_bbox, bbox_of_pole, parse_pole
+from evaluate_detection import parse_gt, parse_gt_pole, calculate_iou_of_bbox, area_of_bbox, bbox_of_pole, parse_pole, calculate_iou_of_poles
 
 
 def test_parse_gt_pole():
@@ -10,9 +10,9 @@ def test_parse_gt_pole():
 
 def test_parse_gt():
     gt_map = parse_gt('./test_data/annotations.xml')
-    assert 'guimiao-night_0.png' in gt_map
-    assert 5 == len(gt_map['guimiao-night_0.png'])
-    pole1 = gt_map['guimiao-night_0.png'][0]
+    assert 'guimiao-night_0' in gt_map
+    assert 5 == len(gt_map['guimiao-night_0'])
+    pole1 = gt_map['guimiao-night_0'][0]
     assert 2 == len(pole1)
     left, right = pole1
     assert left[0][0] == pytest.approx(178.15)
@@ -45,6 +45,15 @@ def test_parse_pole_detection():
     pole = parse_pole('(88.4806,529.004)--(89.8054,580.028) | (102.372,537.977)--(101.829,575.998)')
     assert pole[0] == ((88.4806,529.004), (89.8054,580.028))
 
-def test_parse_pole_detection():
+def test_parse_pole_detection2():
     pole = parse_pole('(88,529)--(89.8054,580.028) | (102.372,537.977)--(101.829,575.998)')
     assert pole[0] == ((88.,529.), (89.8054,580.028))
+
+def test_parse_pole_detection3():
+    pole = parse_pole('(3.34392e-06,696)--(-3.34392e-06,849) | (13.1554,696)--(8.14999,849)')
+    assert pole[0][0][0] == pytest.approx(3.34392e-6)
+
+def test_iou_of_poles():
+    pole1 = (((2, 0), (0, 4)), ((4, 0), (5, 4)))
+    pole2 = (((4, 3), (4, 7)), ((6, 3), (6, 7)))
+    assert pytest.approx(0.875 / (14 + 8 - 0.875)) == calculate_iou_of_poles(pole1, pole2)
