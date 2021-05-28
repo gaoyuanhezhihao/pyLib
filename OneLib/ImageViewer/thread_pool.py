@@ -16,14 +16,13 @@ class ThreadPool:
     def try_get_one_job(self, i):
         if self.exit:
             return True
-        self.condition.acquire()
-        if self.job_queue.empty():
-            self.condition.release()
-            return False
-        else:
-            self.job_buf[i] = self.job_queue.get()
-            self.condition.release()
-            return True
+        with self.condition:
+            if self.job_queue.empty():
+                return False
+            else:
+                print("thread-", i)
+                self.job_buf[i] = self.job_queue.get()
+                return True
 
 
     def thread_main(self, i):
@@ -36,17 +35,21 @@ class ThreadPool:
             self.job_buf[i]()
 
     def add_job(self, job_func):
-        self.condition.acquire()
-        self.job_queue.put(job_func)
-        self.condition.notify()
-        self.condition.release()
+        with self.condition:
+            self.job_queue.put(job_func)
+            self.condition.notify()
+
+    def stop(self):
+        with self.condition:
+            self.exit = True
+            self.condition.notify_all()
 
 
 
 from time import sleep
 if __name__ == '__main__':
     thread_pool = ThreadPool(4)
-    for i in range(20):
+    for i in range(2000):
         thread_pool.add_job(partial(print, i))
     sleep(10)
 
