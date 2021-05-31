@@ -20,7 +20,6 @@ class ThreadPool:
             if self.job_queue.empty():
                 return False
             else:
-                print("thread-", i)
                 self.job_buf[i] = self.job_queue.get()
                 return True
 

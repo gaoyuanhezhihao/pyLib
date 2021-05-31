@@ -7,6 +7,8 @@ import cv2
 from time import time,sleep
 import threading
 from player_ui import PlayerUI
+from thread_pool import ThreadPool
+from functools import partial
 
 
 def load_image(fp, dst, key, cond_var=None):
@@ -21,12 +23,14 @@ def load_image(fp, dst, key, cond_var=None):
 class ImageMap:
 
     def __init__(self, directory):
+        self.prefetch_number = 30
         self.map_ = {}
         self.thread_map_ = {}
         self.i_ = 0
         self.dir_ = directory
         self.buffered_ = set()
         self.list_files(directory)
+        self.thread_pool = ThreadPool(self.prefetch_number)
         self.update_jobs()
 
     def list_files(self, directory):
@@ -48,13 +52,14 @@ class ImageMap:
 
 
     def update_jobs(self):
-        for i in range(self.i_, min(len(self.fnames_)-1, self.i_+10)):
+        for i in range(self.i_, min(len(self.fnames_)-1, self.i_+self.prefetch_number)):
             if i not in self.map_:
                 self.buffered_.add(i)
                 self.map_[i] = i
                 fp = os.path.join(self.dir_, self.fnames_[i])
-                self.thread_map_[i] = threading.Thread(target=load_image, args=(fp, self.map_, i))
-                self.thread_map_[i].start()
+                # self.thread_map_[i] = threading.Thread(target=load_image, args=(fp, self.map_, i))
+                self.thread_pool.add_job(partial(load_image, fp, self.map_, i))
+                # self.thread_map_[i].start()
 
         # remove too old image
         old_ids = []
@@ -72,6 +77,10 @@ class ImageMap:
         # print('waited %f ms' % (time() - start) * 1000)
         return self.map_[self.i_]
 
+    def stop(self):
+        self.thread_pool.stop()
+
+
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
@@ -82,6 +91,7 @@ if __name__ == '__main__':
     fnames = os.listdir(args.directory)
     fnames = sorted(fnames, key=lambda x:int(x[:x.find('.')]))
 
-    imgs = ImageMap(args.directory)
-    ui = PlayerUI(imgs)
+    image_fetcher = ImageMap(args.directory)
+    ui = PlayerUI(image_fetcher)
     ui.run()
+    image_fetcher.stop()
