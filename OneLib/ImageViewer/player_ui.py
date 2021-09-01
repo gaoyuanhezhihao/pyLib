@@ -9,7 +9,7 @@ class PlayerUI:
 
     def run(self):
         freq = 10
-        stop = False
+        pause = False
         i = 0
         while True:
             start = time()
@@ -20,13 +20,13 @@ class PlayerUI:
                 print("freq is too high")
                 wait_time = 1
             cmd = cv2.waitKey(int(wait_time))
-            if -1 != cmd:
-                print(cmd)
+            # if -1 != cmd:
+                # print(cmd)
             if cmd == 100: # 'd' next frame
-                stop = True
+                pause = True
                 self.image_fetcher.inc()
             elif cmd == 97: # 'a' prev frame
-                stop = True
+                pause = True
                 self.image_fetcher.dec()
             elif cmd == 44 : # ',': slow down
                 freq -= 2
@@ -36,8 +36,9 @@ class PlayerUI:
                 freq += 2
                 print("freq=", freq)
             elif cmd == 32: #space: toggle pause/play
-                stop = not stop
+                pause = not pause
             elif cmd == 113: # q: quit
-                exit(0)
-            if not stop:
+                print("exit")
+                break
+            if not pause:
                 self.image_fetcher.inc()
