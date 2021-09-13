@@ -36,30 +36,26 @@ def list_first_file_of_subdirectories(directory):
             fp = join(directory, name, TARGET_FILE)
             if os.path.exists(fp):
                 file_paths.append(fp)
+                assert os.path.exists(fp)
     return sorted(file_paths, key=lambda x:float(x.split('/')[-2]))
 
+def list_float_timed_files(directory):
+    fnames = os.listdir(directory)
+    fnames = [f for f in fnames if f.endswith('.bmp')]
+    fnames = sorted(fnames, key=lambda x:float(x[:x.rfind('.')]))
+    return [join(directory, fname) for fname in fnames]
 
 class ImageMap:
 
-    def __init__(self, directory, list_file_func=None):
+    def __init__(self, file_paths):
         self.prefetch_number = 8
         self.map_ = {}
         self.thread_map_ = {}
         self.i_ = 0
-        self.dir_ = directory
         self.buffered_ = set()
-        if list_file_func:
-            self.file_paths= list_file_func(directory)
-        else:
-            self.file_paths = self.list_files(directory)
+        self.file_paths= file_paths
         self.thread_pool = ThreadPool(self.prefetch_number)
         self.update_jobs()
-
-    def list_files(self, directory):
-        fnames = os.listdir(directory)
-        fnames = sorted(fnames, key=lambda x:int(x[:x.find('.')]))
-        return [join(directory, fname) for fname in fnames]
-
 
     def inc(self, step = 1) :
         self.i_ += step
@@ -92,6 +88,7 @@ class ImageMap:
 
     def get_image(self):
         # start = time()
+        assert self.i_ in self.map_, 'Invalid key %d, only follow keys in map:%s' % (self.i_, ','.join(self.map_.keys()))
         while type(self.map_[self.i_]) == int:
             sleep(0.001)
         # print('waited %f ms' % (time() - start) * 1000)
@@ -105,13 +102,14 @@ class ImageMap:
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('directory')
+    p.add_argument('--extension', dest='extension', default='jpg', help='extension of image files')
     args = p.parse_args()
 
 
     # fnames = os.listdir(args.directory)
     # fnames = sorted(fnames, key=lambda x:int(x[:x.find('.')]))
 
-    image_fetcher = ImageMap(args.directory, list_first_file_of_subdirectories)
+    image_fetcher = ImageMap(list_float_timed_files(args.directory))
     ui = PlayerUI(image_fetcher)
     ui.run()
     image_fetcher.stop()
