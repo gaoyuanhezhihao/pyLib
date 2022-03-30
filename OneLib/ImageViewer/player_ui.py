@@ -37,8 +37,12 @@ class PlayerUI:
                 print("freq=", freq)
             elif cmd == 32: #space: toggle pause/play
                 pause = not pause
-            elif cmd == 113: # q: quit
+            elif cmd == 113:  # q: quit
                 print("exit")
                 break
+            elif cmd == 122:  # z prev 100 frames
+                self.image_fetcher.dec(100)
+            elif cmd == 99:  # c next 100 frames
+                self.image_fetcher.inc(100)
             if not pause:
                 self.image_fetcher.inc()
