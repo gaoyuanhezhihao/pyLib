@@ -13,13 +13,15 @@ import glob
 import re
 
 
-def load_image(fp, dst, key, cond_var=None):
+def load_image(fp, dst, key, color_scale):
     # print("reading %s..."%fp)
-    assert os.path.exists(fp)
+    assert os.path.exists(fp), fp
     img = cv2.imread(fp)
+    if color_scale:
+        img = img * color_scale
     dst[key] = img
-    if cond_var:
-        cond_var.notify()
+    # if cond_var:
+        # cond_var.notify()
     # print("readed %s Done %d" % (fp, key))
 
 def isfloat(value):
@@ -62,7 +64,7 @@ def list_images(directory, extension):
 
 class ImageMap:
 
-    def __init__(self, file_paths):
+    def __init__(self, file_paths, color_scale=None):
         if len(file_paths) == 0:
             print('Error: no files loaded')
             exit(-1)
@@ -73,6 +75,7 @@ class ImageMap:
         self.buffered_ = set()
         self.file_paths= file_paths
         self.thread_pool = ThreadPool(self.prefetch_number)
+        self.color_scale = color_scale
         self.update_jobs()
 
     def inc(self, step=1):
@@ -122,6 +125,7 @@ if __name__ == '__main__':
     p.add_argument('--pattern')
     p.add_argument('--directory')
     p.add_argument('--extension', dest='extension', default='jpg', help='extension of image files')
+    p.add_argument('--color_scale', type=int, default=None, help='color scale will be multiplied to every r,g,b of every pixel')
     args = p.parse_args()
 
 
@@ -133,7 +137,7 @@ if __name__ == '__main__':
         image_files = list_images(args.directory, args.extension)
     elif args.pattern:
         print("use glob pattern")
-        image_files = glob.glob(args.pattern)
+    image_fetcher = ImageMap(image_files, args.color_scale)
     image_fetcher = ImageMap(image_files)
     ui = PlayerUI(image_fetcher)
     ui.run()
