@@ -3,7 +3,7 @@ from os.path import join
 from functools import partial
 import cv2
 import shutil
-from collections import deque
+# from collections import deque
 from threading import Condition
 import multiprocessing as mp
 import queue
@@ -11,13 +11,14 @@ from thread_pool import ThreadPool
 import logging
 from threading import Lock
 import time
+from linked_list import LinkedList
 # import atexit
 
-TAIL_THRES = 1000
+TAIL_THRES = 100
 HEAD_THRES = 10
 
-PREV_FETCH = 100
-AFTER_FETCH = 1000
+PREV_FETCH = 20
+AFTER_FETCH = 200
 
 logging.basicConfig(level=logging.INFO)
 def copy_file(src_path, dest_path):
@@ -54,17 +55,23 @@ class LRU:
         self.max_disk_bytes = max_disk_bytes
         self.directory_space_costed = 0
         self.cache_directory = cache_directory
-        file_names = [f for f in os.listdir(cache_directory) if not os.path.isdir(f)]
-        file_paths = [join(cache_directory, fn) for fn in file_names]
-        for fp in file_paths:
-            self.directory_space_costed += os.path.getsize(fp)
-        self.cache_records = [(os.path.getmtime(fp), fn) for fp, fn in zip(file_paths, file_names)]
-        self.cache_records = deque(sorted(self.cache_records))
-        # print('sorted cache:\n', self.cache_records)
-        self.fname_to_record_id_map = {rd[1]: i for rd, i in zip(self.cache_records, range(len(self.cache_records)))}
         self.lock = Lock()
         self.logger = logging.getLogger('LRU')
+        self.__load__cache__()
         self.thread_pool = ThreadPool(16)
+
+    def __load__cache__(self):
+        file_names = [f for f in os.listdir(self.cache_directory) if not os.path.isdir(f)]
+        file_paths = [join(self.cache_directory, fn) for fn in file_names]
+        for fp in file_paths:
+            self.directory_space_costed += os.path.getsize(fp)
+        cache_records = sorted([(os.path.getmtime(fp), fn) for fp, fn in zip(file_paths, file_names)])
+        self.cache_priority_list = LinkedList()
+        self.fname_to_record_id_map = {}
+        for record in cache_records:
+            record_node = self.cache_priority_list.push_back(record)
+            self.fname_to_record_id_map[record[1]] = record_node
+
 
     def __exit__(self):
         self.thread_pool.stop()
@@ -91,11 +98,14 @@ class LRU:
         assert os.path.exists(cache_file_path)
         file_path = join(self.cache_directory, fname)
         os.utime(file_path) # touch file
-        # with self.lock:
-        old_index = self.fname_to_record_id_map[fname]
-        self.cache_records.append((os.path.getmtime(file_path), fname))
-        self.fname_to_record_id_map[fname] = len(self.cache_records) - 1
-        self.cache_records[old_index] = None
+        with self.lock:
+            old_record_node = self.fname_to_record_id_map[fname]
+            self.cache_priority_list.erase(old_record_node)
+            new_record_node = self.cache_priority_list.push_back((os.path.getmtime(file_path), fname))
+            self.fname_to_record_id_map[fname] = new_record_node
+            # self.fname_to_record_id_map[fname] = len(self.cache_records) - 1
+            # self.cache_records[old_index] = None
+            assert not self.cache_priority_list.empty()
         return cache_file_path
 
     def prefetch(self, src_path):
@@ -114,37 +124,38 @@ class LRU:
         src_directory, fname = os.path.split(src_path)
         cache_file_path = join(self.cache_directory, fname)
         assert not os.path.exists(cache_file_path), cache_file_path
-        assert os.path.exists(src_path), "file not exits:" + src_path
+        assert os.path.exists(src_path), "file not exits:'%s'"%src_path
         assert fname not in self.fname_to_record_id_map or type(self.fname_to_record_id_map[fname]) == Job
         copy_file(src_path, cache_file_path)
         # shutil.copyfile(src_path, cache_file_path)
         os.utime(cache_file_path)
+        file_size = os.path.getsize(cache_file_path)
         with self.lock:
-            self.cache_records.append((os.path.getmtime(cache_file_path), fname))
-            self.fname_to_record_id_map[fname] = len(self.cache_records)-1
-            self.directory_space_costed += os.path.getsize(cache_file_path)
+            node = self.cache_priority_list.push_back((os.path.getmtime(cache_file_path), fname))
+            assert not self.cache_priority_list.empty()
+            self.fname_to_record_id_map[fname] = node
+            self.directory_space_costed += file_size
         return cache_file_path
 
     def remove_old(self):
-        while len(self.cache_records) > 0 and self.directory_space_costed > self.max_disk_bytes:
-            while len(self.cache_records) > 0 and self.cache_records[0] is None:
-                with self.lock:
-                    self.cache_records.popleft()
-            if len(self.cache_records) > 0:
-                with self.lock:
-                    oldest_record = self.cache_records.popleft()
-                    self.fname_to_record_id_map.pop(oldest_record[1])
-                fpath = join(self.cache_directory, oldest_record[1])
-                assert os.path.exists(fpath)
-                self.directory_space_costed -= os.path.getsize(fpath)
-                self.logger.info('remove %s', fpath)
-                os.remove(fpath)
+        # self.logger.info('disk size:%d', self.directory_space_costed)
+        # self.logger.info(self.cache_priority_list.empty())
+        while self.directory_space_costed > self.max_disk_bytes and not self.cache_priority_list.empty():
+            with self.lock:
+                oldest_record = self.cache_priority_list.head()
+                self.cache_priority_list.erase(oldest_record)
+                self.fname_to_record_id_map.pop(oldest_record.data[1])
+            fpath = join(self.cache_directory, oldest_record.data[1])
+            assert os.path.exists(fpath)
+            self.directory_space_costed -= os.path.getsize(fpath)
+            self.logger.info('remove %s', fpath)
+            os.remove(fpath)
 
 
 class DirectoryCache:
 
     def __init__(self, max_disk_size, src_path_list):
-        self.src_path_list = src_path_list
+        self.src_path_list = [p.strip() for p in src_path_list]
         self.src_directory = os.path.split(src_path_list[0])[0]
         directory_id = self.replace_path_to_id(self.src_directory)
         cache_root_dir = '/tmp'
@@ -198,6 +209,7 @@ class DirectoryCache:
         self.logger.info('get_cache_path %d', index)
         cache_path = self.lru.get(self.src_path_list[index])
         self.update_prefetch_jobs(index)
+        self.lru.remove_old()
         return cache_path
 
 _1KB = 1024

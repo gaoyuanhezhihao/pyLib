@@ -11,6 +11,7 @@ from thread_pool import ThreadPool
 from functools import partial
 import glob
 import re
+from ssd_cache import DirectoryCache, _1GB
 # import ipdb
 
 
@@ -101,19 +102,20 @@ class ImageMap:
         self.file_paths = file_paths
         self.thread_pool = ThreadPool(self.thread_number)
         self.color_scale = color_scale
-        self.update_jobs()
+        self.cache = DirectoryCache(_1GB, file_paths)
+        # self.update_jobs()
 
     def inc(self, step=1):
         self.i_ += step
         self.i_ = min(self.i_, len(self.file_paths)-1)
         print('inc:', self.file_paths[self.i_])
-        self.update_jobs()
+        # self.update_jobs()
 
     def dec(self, step=1):
         self.i_ -= step
         self.i_ = max(self.i_, 0)
         print('dec:', self.file_paths[self.i_])
-        self.update_jobs()
+        # self.update_jobs()
 
 
     def update_jobs(self):
@@ -132,13 +134,30 @@ class ImageMap:
         for i in old_ids:
             self.buffered_.remove(i)
 
+    def clear_old_buffer(self):
+        old_ids = []
+        for i in self.buffered_:
+            if i < self.i_ - 5:
+                self.map_.pop(i)
+                old_ids.append(i)
+        for i in old_ids:
+            self.buffered_.remove(i)
+
+
     def get_image(self):
         # start = time()
-        assert self.i_ in self.map_, 'Invalid key %d, only follow keys in map:%s' % (self.i_, ','.join(self.map_.keys()))
-        while type(self.map_[self.i_]) == int:
-            sleep(0.001)
+        # assert self.i_ in self.map_, 'Invalid key %d, only follow keys in map:%s' % (self.i_, ','.join(self.map_.keys()))
+        # while type(self.map_[self.i_]) == int:
+            # sleep(0.001)
         # print('waited %f ms' % (time() - start) * 1000)
+        # return self.map_[self.i_]
+        if not self.i_ in self.map_:
+            cache_path = self.cache.get_cache_path(self.i_)
+            self.map_[self.i_] = cv2.imread(cache_path)
+            self.buffered_.add(self.i_)
+        self.clear_old_buffer()
         return self.map_[self.i_]
+
 
     def stop(self):
         self.thread_pool.stop()
