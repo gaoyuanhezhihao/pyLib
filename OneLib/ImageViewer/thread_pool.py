@@ -16,14 +16,21 @@ class ThreadPool:
     def try_get_one_job(self, i):
         if self.exit:
             return True
+        # with self.condition:
+        if self.job_queue.empty():
+            return False
+        else:
+            # print('getting:', i)
+            self.job_buf[i] = self.job_queue.get()
+            # print('got:', i)
+            return True
+
+    def clear_job_queue(self):
         with self.condition:
-            if self.job_queue.empty():
-                return False
-            else:
-                # print('getting:', i)
-                self.job_buf[i] = self.job_queue.get()
-                # print('got:', i)
-                return True
+            for _ in range(self.job_queue.qsize()):
+                job = self.job_queue.get()
+                job.complete()
+
 
 
     def thread_main(self, i):

@@ -15,11 +15,11 @@ from linked_list import LinkedList
 from datetime import datetime
 # import atexit
 
-TAIL_THRES = 100
-HEAD_THRES = 10
+TAIL_THRES = 200
+HEAD_THRES = 20
 
-PREV_FETCH = 20
-AFTER_FETCH = 200
+PREV_FETCH =  2 * TAIL_THRES
+AFTER_FETCH = 2 * HEAD_THRES
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     level=logging.INFO,
@@ -88,16 +88,20 @@ class LRU:
     def get(self, src_path):
         src_directory, fname = os.path.split(src_path)
         if fname in self.fname_to_record_id_map:
-            return self.__get_from_cache(fname)
+            return self.__get_from_cache(src_path)
         else:
             return self.__create(src_path)
 
-    def __get_from_cache(self, fname):
+    def __get_from_cache(self, src_path):
+        src_directory, fname = os.path.split(src_path)
         logger.info('get from cache %s', fname)
         record = self.fname_to_record_id_map[fname]
         if type(record) == Job:
             logger.info('wait for complete %s', fname)
             record.wait()
+            if type(self.fname_to_record_id_map[fname]) == Job:
+                logger.warning('Job pre-finished: %s', fname)
+                return self.__create(src_path)
         return self.__touch(fname)
 
 
@@ -127,6 +131,10 @@ class LRU:
             job = Job(partial(self.__create, src_path))
             self.fname_to_record_id_map[fname] = job
             self.thread_pool.add_job(job)
+
+    def clear_job_queue(self):
+        self.thread_pool.clear_job_queue()
+
 
     def __create(self, src_path):
         logger.info('create %s', src_path)
@@ -175,8 +183,6 @@ class DirectoryCache:
         self.prefetch_head = 0
         self.prefetch_end = 0
         self.last_prefetch_update_index = -10000
-        self.handler.setLevel(logging.INFO)
-        logger.addHandler(self.handler)
         # self.thread_pool = ThreadPool(16)
         # atexit.register(self.__exit__)
 
@@ -190,9 +196,10 @@ class DirectoryCache:
             self.prefetch_head = max(0, i - PREV_FETCH)
             self.prefetch_end = min(len(self.src_path_list), i + AFTER_FETCH)
             logger.info('refesh prefetch jobs: [%d, %d]', self.prefetch_head, self.prefetch_end)
-            for k in range(self.prefetch_head, self.prefetch_end):
+            for k in range(i, self.prefetch_end):
                 self.lru.prefetch(self.src_path_list[k])
-
+            for k in range(self.prefetch_head, i):
+                self.lru.prefetch(self.src_path_list[k])
 
     def replace_path_to_id(self, path):
         id_str = path.replace('*', '_star_')
@@ -211,6 +218,10 @@ class DirectoryCache:
             # shutil.copyfile(path, cache_file_path)
         # return self.lru.get(path)
 
+    def reset_prefetch_jobs(self, i):
+        logger.info('reset prefetch job to %d', i)
+        self.lru.clear_job_queue()
+        self.update_prefetch_jobs(i)
 
     def get_cache_path(self, index):
         logger.info('get_cache_path %d', index)

@@ -112,12 +112,16 @@ class ImageMap:
     def inc(self, step=1):
         self.i_ += step
         self.i_ = min(self.i_, len(self.file_paths)-1)
+        if step > 50:
+            self.cache.reset_prefetch_jobs(self.i_)
         print('inc:', self.file_paths[self.i_])
         # self.update_jobs()
 
     def dec(self, step=1):
         self.i_ -= step
         self.i_ = max(self.i_, 0)
+        if step > 50:
+            self.cache.reset_prefetch_jobs(self.i_)
         print('dec:', self.file_paths[self.i_])
         # self.update_jobs()
 
