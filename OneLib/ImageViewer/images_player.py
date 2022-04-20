@@ -12,6 +12,10 @@ from functools import partial
 import glob
 import re
 from ssd_cache import DirectoryCache, _1GB
+PROFILE_MODE=True
+if PROFILE_MODE:
+    from viztracer import VizTracer
+
 # import ipdb
 
 
@@ -89,7 +93,7 @@ def glob_images(args):
 
 class ImageMap:
 
-    def __init__(self, file_paths, color_scale=None):
+    def __init__(self, file_paths, color_scale=None, start_index=0):
         if len(file_paths) == 0:
             print('Error: no files loaded')
             exit(-1)
@@ -97,7 +101,7 @@ class ImageMap:
         self.prefetch_number = 128
         self.map_ = {}
         self.thread_map_ = {}
-        self.i_ = 0
+        self.i_ = start_index
         self.buffered_ = set()
         self.file_paths = file_paths
         self.thread_pool = ThreadPool(self.thread_number)
@@ -161,6 +165,7 @@ class ImageMap:
 
     def stop(self):
         self.thread_pool.stop()
+        self.cache.__exit__()
 
 
 def cache_file_list(file_list_id, file_lists):
@@ -196,6 +201,7 @@ if __name__ == '__main__':
     p.add_argument('--load_cached_file_list', type=bool, default=True)
     p.add_argument('--extension', dest='extension', default='jpg', help='extension of image files')
     p.add_argument('--color_scale', type=int, default=None, help='color scale will be multiplied to every r,g,b of every pixel')
+    p.add_argument('--start_timestamp', type=float, help='start from frame whose timestamp is first one larger than this timestamp')
     args = p.parse_args()
 
 
@@ -207,7 +213,23 @@ if __name__ == '__main__':
         image_files = list_images(args)
     elif args.pattern:
         image_files = glob_images(args)
-    image_fetcher = ImageMap(image_files, args.color_scale)
+
+    start_index = 0
+    if args.start_timestamp:
+        p = re.compile(r'\d*\.\d*')
+        for i in range(len(image_files)):
+            m = p.findall(image_files[i])
+            if m and float(m[0]) > args.start_timestamp:
+                start_index = i
+                break
+
+    if PROFILE_MODE:
+        tracer = VizTracer()
+        tracer.start()
+    image_fetcher = ImageMap(image_files, args.color_scale, start_index=start_index)
     ui = PlayerUI(image_fetcher)
     ui.run()
+    if PROFILE_MODE:
+        tracer.stop()
+        tracer.save()
     image_fetcher.stop()
