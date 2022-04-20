@@ -12,6 +12,7 @@ import logging
 from threading import Lock
 import time
 from linked_list import LinkedList
+from datetime import datetime
 # import atexit
 
 TAIL_THRES = 100
@@ -20,7 +21,15 @@ HEAD_THRES = 10
 PREV_FETCH = 20
 AFTER_FETCH = 200
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    level=logging.INFO,
+                    datefmt='%H:%M:%S')
+
+logger = logging.getLogger('DirectoryCache')
+handler = logging.FileHandler('DirectoryCache%s.log' % datetime.now().ctime().replace(' ', '_'))
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
+
 def copy_file(src_path, dest_path):
     # time.sleep(1)
     shutil.copyfile(src_path, dest_path)
@@ -56,7 +65,7 @@ class LRU:
         self.directory_space_costed = 0
         self.cache_directory = cache_directory
         self.lock = Lock()
-        self.logger = logging.getLogger('LRU')
+        logger = logging.getLogger('LRU')
         self.__load__cache__()
         self.thread_pool = ThreadPool(16)
 
@@ -84,16 +93,16 @@ class LRU:
             return self.__create(src_path)
 
     def __get_from_cache(self, fname):
-        self.logger.info('get from cache %s', fname)
+        logger.info('get from cache %s', fname)
         record = self.fname_to_record_id_map[fname]
         if type(record) == Job:
-            self.logger.info('wait for complete %s', fname)
+            logger.info('wait for complete %s', fname)
             record.wait()
         return self.__touch(fname)
 
 
     def __touch(self, fname):
-        self.logger.info('touch %s', fname)
+        logger.info('touch %s', fname)
         cache_file_path = join(self.cache_directory, fname)
         assert os.path.exists(cache_file_path)
         file_path = join(self.cache_directory, fname)
@@ -111,16 +120,16 @@ class LRU:
     def prefetch(self, src_path):
         src_directory, fname = os.path.split(src_path)
         if fname in self.fname_to_record_id_map:
-            self.logger.info('already fetched of fetching %s', fname)
+            logger.info('already fetched of fetching %s', fname)
             return
         else:
-            self.logger.info('create job for %s', fname)
+            logger.info('create job for %s', fname)
             job = Job(partial(self.__create, src_path))
             self.fname_to_record_id_map[fname] = job
             self.thread_pool.add_job(job)
 
     def __create(self, src_path):
-        self.logger.info('create %s', src_path)
+        logger.info('create %s', src_path)
         src_directory, fname = os.path.split(src_path)
         cache_file_path = join(self.cache_directory, fname)
         assert not os.path.exists(cache_file_path), cache_file_path
@@ -138,8 +147,8 @@ class LRU:
         return cache_file_path
 
     def remove_old(self):
-        # self.logger.info('disk size:%d', self.directory_space_costed)
-        # self.logger.info(self.cache_priority_list.empty())
+        # logger.info('disk size:%d', self.directory_space_costed)
+        # logger.info(self.cache_priority_list.empty())
         while self.directory_space_costed > self.max_disk_bytes and not self.cache_priority_list.empty():
             with self.lock:
                 oldest_record = self.cache_priority_list.head()
@@ -148,7 +157,7 @@ class LRU:
             fpath = join(self.cache_directory, oldest_record.data[1])
             assert os.path.exists(fpath)
             self.directory_space_costed -= os.path.getsize(fpath)
-            self.logger.info('remove %s', fpath)
+            logger.info('remove %s', fpath)
             os.remove(fpath)
 
 
@@ -166,10 +175,8 @@ class DirectoryCache:
         self.prefetch_head = 0
         self.prefetch_end = 0
         self.last_prefetch_update_index = -10000
-        self.logger = logging.getLogger('DirectoryCache')
-        self.handler = logging.FileHandler('DirectoryCache.log')
         self.handler.setLevel(logging.INFO)
-        self.logger.addHandler(self.handler)
+        logger.addHandler(self.handler)
         # self.thread_pool = ThreadPool(16)
         # atexit.register(self.__exit__)
 
@@ -182,7 +189,7 @@ class DirectoryCache:
             # add new jobs
             self.prefetch_head = max(0, i - PREV_FETCH)
             self.prefetch_end = min(len(self.src_path_list), i + AFTER_FETCH)
-            self.logger.info('refesh prefetch jobs: [%d, %d]', self.prefetch_head, self.prefetch_end)
+            logger.info('refesh prefetch jobs: [%d, %d]', self.prefetch_head, self.prefetch_end)
             for k in range(self.prefetch_head, self.prefetch_end):
                 self.lru.prefetch(self.src_path_list[k])
 
@@ -206,7 +213,7 @@ class DirectoryCache:
 
 
     def get_cache_path(self, index):
-        self.logger.info('get_cache_path %d', index)
+        logger.info('get_cache_path %d', index)
         cache_path = self.lru.get(self.src_path_list[index])
         self.update_prefetch_jobs(index)
         self.lru.remove_old()
