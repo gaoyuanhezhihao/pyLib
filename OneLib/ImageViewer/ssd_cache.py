@@ -15,11 +15,11 @@ from linked_list import LinkedList
 from datetime import datetime
 # import atexit
 
+HEAD_THRES = 5
 TAIL_THRES = 200
-HEAD_THRES = 20
 
-PREV_FETCH =  2 * TAIL_THRES
-AFTER_FETCH = 2 * HEAD_THRES
+PREV_FETCH =  2 * HEAD_THRES
+AFTER_FETCH = 2 * TAIL_THRES
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     level=logging.INFO,
