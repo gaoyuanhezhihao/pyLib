@@ -40,7 +40,11 @@ class ThreadPool:
                 self.condition.wait_for(partial(self.try_get_one_job, i))
             if self.exit:
                 break;
-            self.job_buf[i]()
+            try:
+                self.job_buf[i]()
+            except Exception as e:
+                print(e)
+                exit()
         # print('exit,', i)
 
     def add_job(self, job_func):

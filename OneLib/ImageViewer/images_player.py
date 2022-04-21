@@ -1,3 +1,4 @@
+from logger import logger, timed
 import sys
 import os
 from os.path import join
@@ -5,13 +6,15 @@ import sys
 import argparse
 import cv2
 from time import time,sleep
+from timeit import default_timer as timer
 import threading
 from player_ui import PlayerUI
 from thread_pool import ThreadPool
 from functools import partial
 import glob
 import re
-from ssd_cache import DirectoryCache, _1GB
+from ssd_cache import DirectoryCache, _1GB, Job
+from threading import Lock
 PROFILE_MODE=True
 if PROFILE_MODE:
     from viztracer import VizTracer
@@ -19,16 +22,16 @@ if PROFILE_MODE:
 # import ipdb
 
 
-def load_image(fp, dst, key, color_scale):
-    # print("reading %s..."%fp)
-    assert os.path.exists(fp), fp
-    img = cv2.imread(fp)
-    if color_scale:
-        img = img * color_scale
-    dst[key] = img
-    # if cond_var:
-        # cond_var.notify()
-    # print("readed %s Done %d" % (fp, key))
+# def load_image(fp, dst, key, color_scale):
+    # # print("reading %s..."%fp)
+    # assert os.path.exists(fp), fp
+    # img = cv2.imread(fp)
+    # if color_scale:
+        # img = img * color_scale
+    # dst[key] = img
+    # # if cond_var:
+        # # cond_var.notify()
+    # # print("readed %s Done %d" % (fp, key))
 
 def isfloat(value):
   try:
@@ -97,11 +100,13 @@ class ImageMap:
         if len(file_paths) == 0:
             print('Error: no files loaded')
             exit(-1)
-        self.thread_number = 16
-        self.prefetch_number = 128
+        self.thread_number = 4
+        self.prefetch_number = 8
+        self.map_lock = Lock()
         self.map_ = {}
         self.thread_map_ = {}
         self.i_ = start_index
+        self.buffer_lock = Lock()
         self.buffered_ = set()
         self.file_paths = file_paths
         self.thread_pool = ThreadPool(self.thread_number)
@@ -114,44 +119,60 @@ class ImageMap:
         self.i_ = min(self.i_, len(self.file_paths)-1)
         if step > 50:
             self.cache.reset_prefetch_jobs(self.i_)
-        print('inc:', self.file_paths[self.i_])
-        # self.update_jobs()
+        logger.info('inc %s', self.file_paths[self.i_])
+        # print('inc:', self.file_paths[self.i_])
+        self.update_jobs()
 
     def dec(self, step=1):
         self.i_ -= step
         self.i_ = max(self.i_, 0)
         if step > 50:
             self.cache.reset_prefetch_jobs(self.i_)
-        print('dec:', self.file_paths[self.i_])
-        # self.update_jobs()
+        logger.info('dec %s', self.file_paths[self.i_])
+        # print('dec:', self.file_paths[self.i_])
+        self.update_jobs()
 
 
+    @timed
     def update_jobs(self):
         for i in range(self.i_, min(len(self.file_paths), self.i_+self.prefetch_number)):
             if i not in self.map_:
-                self.buffered_.add(i)
-                self.map_[i] = i
-                self.thread_pool.add_job(partial(load_image, self.file_paths[i], self.map_, i, self.color_scale))
+                job = Job(partial(self.__load_image, i))
+                self.map_[i] = job
+                self.thread_pool.add_job(job)
 
-        # remove too old image
-        old_ids = []
-        for i in self.buffered_:
-            if i < self.i_ - 5:
-                self.map_.pop(i)
-                old_ids.append(i)
-        for i in old_ids:
-            self.buffered_.remove(i)
-
+    @timed
     def clear_old_buffer(self):
         old_ids = []
-        for i in self.buffered_:
-            if i < self.i_ - 5:
-                self.map_.pop(i)
-                old_ids.append(i)
+        with self.buffer_lock:
+            old_ids = [i for i in self.buffered_ if i < self.i_ - 5]
         for i in old_ids:
-            self.buffered_.remove(i)
+            with self.map_lock:
+                old_img = self.map_.pop(i)
+            del old_img
+            with self.buffer_lock:
+                self.buffered_.remove(i)
 
+    @timed
+    def __add_to_map(self, img, i):
+        with self.buffer_lock:
+            self.buffered_.add(i)
+        with self.map_lock:
+            self.map_[i] = img
 
+    @timed
+    def __load_image(self, i):
+        logger.info('__load_image %d', i)
+        assert i not in self.map_ or isinstance(self.map_[i], Job)
+        cache_path = self.cache.get_cache_path(i)
+        assert os.path.exists(cache_path)
+        img = cv2.imread(cache_path)
+        assert img is not None
+        if self.color_scale:
+            img = img * self.color_scale
+        self.__add_to_map(img, i)
+
+    @timed
     def get_image(self):
         # start = time()
         # assert self.i_ in self.map_, 'Invalid key %d, only follow keys in map:%s' % (self.i_, ','.join(self.map_.keys()))
@@ -159,10 +180,14 @@ class ImageMap:
             # sleep(0.001)
         # print('waited %f ms' % (time() - start) * 1000)
         # return self.map_[self.i_]
-        if not self.i_ in self.map_:
-            cache_path = self.cache.get_cache_path(self.i_)
-            self.map_[self.i_] = cv2.imread(cache_path)
-            self.buffered_.add(self.i_)
+        logger.info('get_image %d', self.i_)
+        if self.i_ not in self.map_:
+            self.__load_image(self.i_)
+        else:
+            logger.info('wait on job')
+            record = self.map_[self.i_]
+            if isinstance(record, Job):
+                record.wait()
         self.clear_old_buffer()
         return self.map_[self.i_]
 

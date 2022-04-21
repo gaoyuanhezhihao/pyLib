@@ -1,4 +1,5 @@
 import os
+from logger import logger, timed
 from os.path import join
 from functools import partial
 import cv2
@@ -21,14 +22,14 @@ TAIL_THRES = 200
 PREV_FETCH =  2 * HEAD_THRES
 AFTER_FETCH = 2 * TAIL_THRES
 
-logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
-                    level=logging.INFO,
-                    datefmt='%H:%M:%S')
+# logging.basicConfig(format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
+                    # level=logging.INFO,
+                    # datefmt='%H:%M:%S')
 
-logger = logging.getLogger('DirectoryCache')
-handler = logging.FileHandler('DirectoryCache%s.log' % datetime.now().ctime().replace(' ', '_'))
-handler.setLevel(logging.INFO)
-logger.addHandler(handler)
+# logger = logging.getLogger('DirectoryCache')
+# handler = logging.FileHandler('DirectoryCache%s.log' % datetime.now().ctime().replace(' ', '_'))
+# handler.setLevel(logging.INFO)
+# logger.addHandler(handler)
 
 def copy_file(src_path, dest_path):
     # time.sleep(1)
@@ -41,8 +42,9 @@ class Job:
         self.completed = False
 
     def __call__(self):
-        self.func()
+        ret = self.func()
         self.complete()
+        return ret
 
     def complete(self):
         with self.cond:
@@ -58,6 +60,10 @@ class Job:
         assert self.completed
 
 
+# class LRU_SLOT:
+
+    # def __init__(self, src_path):
+
 class LRU:
 
     def __init__(self, cache_directory, max_disk_bytes):
@@ -67,7 +73,7 @@ class LRU:
         self.lock = Lock()
         logger = logging.getLogger('LRU')
         self.__load__cache__()
-        self.thread_pool = ThreadPool(16)
+        self.thread_pool = ThreadPool(32)
 
     def __load__cache__(self):
         file_names = [f for f in os.listdir(self.cache_directory) if not os.path.isdir(f)]
@@ -85,7 +91,9 @@ class LRU:
     def __exit__(self):
         self.thread_pool.stop()
 
+    @timed
     def get(self, src_path):
+        logger.info('get %s', src_path)
         src_directory, fname = os.path.split(src_path)
         if fname in self.fname_to_record_id_map:
             return self.__get_from_cache(src_path)
@@ -96,6 +104,7 @@ class LRU:
                 self.fname_to_record_id_map[fname] = job
             return job()
 
+    @timed
     def __get_from_cache(self, src_path):
         src_directory, fname = os.path.split(src_path)
         logger.info('get from cache %s', fname)
@@ -109,6 +118,7 @@ class LRU:
         return self.__touch(fname)
 
 
+    @timed
     def __touch(self, fname):
         logger.info('touch %s', fname)
         cache_file_path = join(self.cache_directory, fname)
@@ -125,6 +135,7 @@ class LRU:
             assert not self.cache_priority_list.empty()
         return cache_file_path
 
+    @timed
     def prefetch(self, src_path):
         src_directory, fname = os.path.split(src_path)
         if fname in self.fname_to_record_id_map:
@@ -143,9 +154,10 @@ class LRU:
         self.thread_pool.clear_job_queue()
 
 
+    @timed
     def __create(self, src_path):
-        logger.info('create %s', src_path)
         src_directory, fname = os.path.split(src_path)
+        logger.info('creating %s', fname)
         cache_file_path = join(self.cache_directory, fname)
         assert not os.path.exists(cache_file_path), cache_file_path
         assert os.path.exists(src_path), "file not exits:'%s'"%src_path
@@ -159,6 +171,7 @@ class LRU:
             assert not self.cache_priority_list.empty()
             self.fname_to_record_id_map[fname] = node
             self.directory_space_costed += file_size
+        logger.info('created %s', fname)
         return cache_file_path
 
     def remove_old(self):
@@ -169,11 +182,11 @@ class LRU:
                 oldest_record = self.cache_priority_list.head()
                 self.cache_priority_list.erase(oldest_record)
                 self.fname_to_record_id_map.pop(oldest_record.data[1])
-            fpath = join(self.cache_directory, oldest_record.data[1])
-            assert os.path.exists(fpath)
-            self.directory_space_costed -= os.path.getsize(fpath)
-            logger.info('remove %s', fpath)
-            os.remove(fpath)
+            cache_path = join(self.cache_directory, oldest_record.data[1])
+            assert os.path.exists(cache_path)
+            self.directory_space_costed -= os.path.getsize(cache_path)
+            os.remove(cache_path)
+            logger.info('remove %s', cache_path)
 
 
 class DirectoryCache:
@@ -196,6 +209,7 @@ class DirectoryCache:
     def __exit__(self):
         self.lru.__exit__()
 
+    @timed
     def update_prefetch_jobs(self, i):
         if i - self.last_prefetch_update_index > TAIL_THRES or self.last_prefetch_update_index - i > HEAD_THRES:
             self.last_prefetch_update_index = i
