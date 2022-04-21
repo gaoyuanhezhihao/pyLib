@@ -90,7 +90,11 @@ class LRU:
         if fname in self.fname_to_record_id_map:
             return self.__get_from_cache(src_path)
         else:
-            return self.__create(src_path)
+            with self.lock:
+                logger.info('create job for %s', fname)
+                job = Job(partial(self.__create, src_path))
+                self.fname_to_record_id_map[fname] = job
+            return job()
 
     def __get_from_cache(self, src_path):
         src_directory, fname = os.path.split(src_path)
@@ -125,12 +129,15 @@ class LRU:
         src_directory, fname = os.path.split(src_path)
         if fname in self.fname_to_record_id_map:
             logger.info('already fetched of fetching %s', fname)
-            return
         else:
-            logger.info('create job for %s', fname)
-            job = Job(partial(self.__create, src_path))
-            self.fname_to_record_id_map[fname] = job
-            self.thread_pool.add_job(job)
+            with self.lock:
+                if fname not in self.fname_to_record_id_map:
+                    cache_file_path = join(self.cache_directory, fname)
+                    assert not os.path.exists(cache_file_path), cache_file_path
+                    logger.info('create job for %s', fname)
+                    job = Job(partial(self.__create, src_path))
+                    self.fname_to_record_id_map[fname] = job
+                    self.thread_pool.add_job(job)
 
     def clear_job_queue(self):
         self.thread_pool.clear_job_queue()
